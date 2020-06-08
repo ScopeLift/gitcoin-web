@@ -93,6 +93,40 @@ Vue.component('grants-cart', {
       return this.donationSummaryString('donationsTotal', 2);
     },
 
+    donationApprovals() {
+      let allApprovals = {};
+
+      for (let index = 0; index < this.grantData.length; index++) {
+        const grant = this.grantData[index];
+        const tokenName = grant.grant_donation_currency;
+
+        if (tokenName === 'ETH') {
+          continue;
+        }
+
+        const tokenDetails = this.getTokenByName(grant.grant_donation_currency);
+        const isRecurring = grant.grant_donation_num_rounds > 1;
+        const spender = isRecurring ? grant.grant_contract_address : bulkCheckoutAddress;
+        let amount = 0;
+
+        if (!isRecurring) {
+          amount = this.toWeiString(grant.grant_donation_amount, tokenDetails.decimals);
+
+        } else {
+          if (grant.grant_contract_version === 0) {
+            amount = this.toWeiString(grant.grant_donation_amount, tokenDetails.decimals, GITCOIN_PERCENTAGE);
+            spender = bulkCheckoutAddress;
+          }
+        }
+
+        if (allApprovals[spender]) {
+          allApprovals[spender] += amount;
+        } else {
+          allApprovals[spender] = amount;
+        }
+      }
+    }
+
     donationInputsNew() {
       // 1. Get token approvals
       // 2. Send non-recurring donations in bulk

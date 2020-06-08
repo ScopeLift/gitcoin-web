@@ -93,6 +93,41 @@ Vue.component('grants-cart', {
       return this.donationSummaryString('donationsTotal', 2);
     },
 
+    donationInputsNew() {
+      // 1. Get token approvals
+      // 2. Send non-recurring donations in bulk
+      // 3. Send total Gitcoin donations for version 0 recurring
+      // 4. Sign data for all recurring donations
+      if (!this.grantData)
+        return undefined;
+
+      let gitcoinFactor = 100 * this.gitcoinFactor;
+
+      // Generate array of objects containing donation info from cart
+      const donations = {};
+
+      this.grantData.forEach(grant => {
+        const tokenDetails = this.getTokenByName(grant.grant_donation_currency);
+        const tokenAddress = tokenDetails.addr;
+        const isRecurring = grant.grant_donation_num_rounds > 1;
+        const spender = isRecurring ? grant.grant_contract_address : bulkCheckoutAddress;
+
+        const key = {
+          tokenAddress,
+          spender
+        };
+
+        const grantAmount = this.toWeiString(grant.grant_donation_amount, tokenDetails.decimals);
+
+        if (donations[key]) {
+          donations[key] += grantAmount;
+        } else {
+          donations[key] = grantAmount;
+        }
+
+      });
+    },
+
     // Array of objects containing all donations and associated data
     donationInputs() {
       if (!this.grantData)
@@ -102,13 +137,18 @@ Vue.component('grants-cart', {
       let gitcoinFactor = 100 * this.gitcoinFactor;
       const donations = this.grantData.map((grant) => {
         const tokenDetails = this.getTokenByName(grant.grant_donation_currency);
+
         const amount = this.toWeiString(grant.grant_donation_amount, tokenDetails.decimals, 100 - gitcoinFactor);
 
         return {
+          // For contract
           token: tokenDetails.addr,
           amount,
           dest: grant.grant_admin_address,
-          name: grant.grant_donation_currency
+          // Helpers
+          name: grant.grant_donation_currency,
+          isRecurring: grant.grant_donation_num_rounds > 1,
+          grant
         };
       });
 
@@ -297,8 +337,32 @@ Vue.component('grants-cart', {
 
         // Token approval checks -------------------------------------------------------------------
         // For each token, check if an approval is needed, and if so save off the data
-        let allowanceData = [];
 
+        // NEW FOR RECURRING -----------------------------------------------------------------------
+        let allowanceData = {};
+
+        for (let i = 0; i < this.donationInputs.length; i += 1) {
+          const donation = this.donationInputs[i];
+          const isRecurring = donation.isRecurring;
+          const grantContractAddress = donation.grant.grant_contract_address;
+          const grantContractVersion = grant.grant_contract_version;
+
+          const tokenContract = new web3.eth.Contract(token_abi, tokenDetails.addr);
+          const spender = isRecurring ? grantContractAddress : bulkCheckoutAddress;
+          const tokenDetails = this.getTokenByName(grant.grant_donation_currency);
+          const scale = grant.grant_donation_num_rounds * 100;
+
+
+          const amount = this.toWeiString(grant.grant_donation_amount, tokenDetails.decimals, scale);
+          const key = {
+            tokenContract,
+            spender
+          };
+
+          allowanceData[key] = amount;
+        }
+
+        // OLF FOR NOT RECURRING -------------------------------------------------------------------
         for (let i = 0; i < selectedTokens.length; i += 1) {
           const tokenDetails = this.getTokenByName(selectedTokens[i]);
 
@@ -308,7 +372,7 @@ Vue.component('grants-cart', {
           }
 
           // Get current allowance
-          const tokenContract = new web3.eth.Contract(token_abi, tokenDetails.addr);
+
           const allowance = new BN(
             await tokenContract.methods
               .allowance(userAddress, bulkCheckoutAddress)
@@ -331,6 +395,9 @@ Vue.component('grants-cart', {
           }
 
           // If we do need to set the allowance, save off the required info
+          const isRecurring = true;
+
+
           allowanceData.push({
             allowance: requiredAllowance.toString(),
             contract: tokenContract
@@ -349,7 +416,8 @@ Vue.component('grants-cart', {
         for (let i = 0; i < allowanceData.length; i += 1) {
           const allowance = allowanceData[i].allowance;
           const contract = allowanceData[i].contract;
-          const approvalTx = contract.methods.approve(bulkCheckoutAddress, allowance);
+          const spender = allowanceData[i].spender;
+          const approvalTx = contract.methods.approve(spender, allowance);
 
           // We split this into two very similar branches, because on the last approval
           // we send the main donation transaction after we get the transaction hash

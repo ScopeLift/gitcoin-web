@@ -410,6 +410,12 @@ Vue.component('grants-cart', {
     // Use watcher to keep local storage in sync with Vue state
     grantData: {
       handler() {
+        this.grantData.forEach(grant => {
+          // Recurring donations not supported for ETH
+          if (grant.grant_donation_currency === 'ETH' && grant.grant_donation_num_rounds !== 1) {
+            grant.grant_donation_num_rounds = 1;
+          }
+        });
         window.localStorage.setItem('grants_cart', JSON.stringify(this.grantData));
       },
       deep: true

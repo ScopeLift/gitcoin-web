@@ -955,6 +955,19 @@ Vue.component('grants-cart', {
   },
 
   async mounted() {
+    const urlTest = '/grants/bulk-fund/';
+
+    console.log('start request');
+    // Send saveSubscription request
+    const r = await fetch(urlTest, {method: 'GET'});
+
+    console.log('response', r);
+
+    const rr = await r.json();
+
+    console.log('json', rr);
+
+    // urlTest
     // Show loading dialog
     this.isLoading = true;
     // Read array of grants in cart from localStorage

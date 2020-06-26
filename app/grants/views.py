@@ -850,6 +850,11 @@ def grant_fund(request, grant_id, grant_slug):
 
     raise Http404
 
+@login_required
+def bulk_grant_fund(request):
+    return JsonResponse({
+        'success': True,
+    })
 
 
 @login_required

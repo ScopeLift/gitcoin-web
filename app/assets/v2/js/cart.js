@@ -1185,10 +1185,6 @@ Vue.component('grants-cart', {
         // No transaction hashes were provided, so just save off the cart data directly
         cartData = this.donationInputs;
       } else {
-        // Add transaction hashes to each donation input object
-        if (txHashes.length !== this.donationInputs.length) {
-          throw new Error('Invalid length of transaction hashes array');
-        }
         cartData = this.donationInputs.map((donation, index) => {
           return {
             ...donation,
